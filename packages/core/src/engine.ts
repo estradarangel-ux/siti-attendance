@@ -142,7 +142,7 @@ export function computeWeek(
     overtimeMinutes,
     overtimeDoubleMinutes,
     overtimeTripleMinutes: overtimeMinutes - overtimeDoubleMinutes,
-    alerts: complianceAlerts(days, effectiveMinutes, policy),
+    alerts: complianceAlerts(days, effectiveMinutes, overtimeMinutes, policy),
   };
 }
 
@@ -163,39 +163,63 @@ function assignToDay(t: number, week: ScheduledDay[]): string | undefined {
   return week.some((d) => d.date === date) ? date : undefined;
 }
 
-function complianceAlerts(days: DayResult[], workedMinutes: number, policy: Policy): ComplianceAlert[] {
+function complianceAlerts(
+  days: DayResult[],
+  effectiveMinutes: number,
+  overtimeMinutes: number,
+  policy: Policy,
+): ComplianceAlert[] {
   const alerts: ComplianceAlert[] = [];
+  const h = (m: number) => (m / 60).toFixed(1);
   const overtimeDays = days.filter((d) => d.overtimeMinutes > 0);
 
   for (const d of overtimeDays) {
     if (d.overtimeMinutes > policy.overtimeDailyMaxMinutes) {
       alerts.push({
-        code: "OVERTIME_DAILY_OVER_3H",
+        code: "OVERTIME_DAILY_MAX_EXCEEDED",
         article: "LFT art. 66",
         date: d.date,
-        message: `Tiempo extra de ${(d.overtimeMinutes / 60).toFixed(1)} h excede el tope diario.`,
+        message: `Tiempo extra de ${h(d.overtimeMinutes)} h excede el tope diario de ${h(policy.overtimeDailyMaxMinutes)} h.`,
+      });
+    }
+  }
+  for (const d of days) {
+    if (d.workedMinutes > policy.dailyTotalMaxMinutes) {
+      alerts.push({
+        code: "DAILY_TOTAL_OVER_12H",
+        article: "LFT art. 68",
+        date: d.date,
+        message: `Jornada total de ${h(d.workedMinutes)} h supera el máximo de ${h(policy.dailyTotalMaxMinutes)} h diarias.`,
       });
     }
   }
   if (overtimeDays.length > policy.overtimeMaxDaysPerWeek) {
     alerts.push({
-      code: "OVERTIME_MORE_THAN_3_DAYS",
+      code: "OVERTIME_TOO_MANY_DAYS",
       article: "LFT art. 66",
       message: `Tiempo extra en ${overtimeDays.length} días de la semana (máximo ${policy.overtimeMaxDaysPerWeek}).`,
     });
   }
-  if (workedMinutes > policy.weeklyLimitHours * 60) {
+  const overtimeMax = policy.overtimeDoubleCapMinutes + policy.overtimeTripleCapMinutes;
+  if (overtimeMinutes > overtimeMax) {
+    alerts.push({
+      code: "OVERTIME_WEEKLY_MAX_EXCEEDED",
+      article: "LFT arts. 66 y 68",
+      message: `Tiempo extra semanal de ${h(overtimeMinutes)} h supera el máximo permitido de ${h(overtimeMax)} h.`,
+    });
+  }
+  if (effectiveMinutes > policy.weeklyLimitHours * 60) {
     alerts.push({
       code: "WEEKLY_LIMIT_EXCEEDED",
-      article: "LFT art. 61 / reforma jornada",
-      message: `Jornada semanal de ${(workedMinutes / 60).toFixed(1)} h supera el límite de ${policy.weeklyLimitHours} h.`,
+      article: "LFT art. 59 y transitorio 2º",
+      message: `Jornada semanal de ${h(effectiveMinutes)} h supera la jornada máxima de ${policy.weeklyLimitHours} h.`,
     });
   }
   if (days.length === 7 && days.every((d) => d.workedMinutes > 0)) {
     alerts.push({
       code: "NO_WEEKLY_REST_DAY",
       article: "LFT art. 69",
-      message: "El empleado laboró los 7 días: falta el día de descanso semanal.",
+      message: "La persona trabajadora laboró los 7 días: falta el día de descanso semanal.",
     });
   }
   return alerts;

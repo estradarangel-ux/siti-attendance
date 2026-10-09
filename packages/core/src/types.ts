@@ -23,7 +23,7 @@ export interface Shift {
 export interface Policy {
   /** Zona horaria IANA del centro de trabajo. */
   timeZone: string;
-  /** Límite semanal de jornada en horas: 48 hoy; 40 al concluir la reforma. */
+  /** Jornada ordinaria máxima semanal (art. 59 y transitorio 2º, DOF 01-05-2026). */
   weeklyLimitHours: number;
   /** Minutos de tolerancia antes de marcar retardo. */
   lateToleranceMinutes: number;
@@ -31,24 +31,50 @@ export interface Policy {
   overtimeMinimumMinutes: number;
   /** Checadas del mismo empleado separadas por menos de esto se consideran duplicadas. */
   duplicateWindowMinutes: number;
-  /** Minutos semanales de tiempo extra pagados al doble antes de pasar a triple (art. 68: 9 h). */
+  /** Tiempo extra semanal pagado al doble (art. 66 y transitorio 4º: 9 h en 2026 → 12 h en 2030). */
   overtimeDoubleCapMinutes: number;
-  /** Tope diario de tiempo extra (art. 66: 3 h). */
+  /** Excedente semanal permitido sobre el art. 66, pagado al triple (art. 68: 4 h). */
+  overtimeTripleCapMinutes: number;
+  /** Tope diario de tiempo extra (art. 66: 4 h). */
   overtimeDailyMaxMinutes: number;
-  /** Días por semana en que se permite tiempo extra (art. 66: 3 veces). */
+  /** Días por semana con tiempo extra (art. 66: máximo 4). */
   overtimeMaxDaysPerWeek: number;
+  /** Suma de jornada ordinaria y extraordinaria por día (art. 68: 12 h). */
+  dailyTotalMaxMinutes: number;
 }
 
-export const DEFAULT_POLICY: Policy = {
-  timeZone: "America/Mexico_City",
-  weeklyLimitHours: 48,
-  lateToleranceMinutes: 10,
-  overtimeMinimumMinutes: 30,
-  duplicateWindowMinutes: 2,
-  overtimeDoubleCapMinutes: 9 * 60,
-  overtimeDailyMaxMinutes: 3 * 60,
-  overtimeMaxDaysPerWeek: 3,
+/**
+ * Reducción gradual de jornada, DOF 01-05-2026, transitorios 2º y 4º.
+ * Cada valor rige a partir del 1 de enero del año indicado.
+ */
+export const LFT_GRADUAL_SCHEDULE: Record<number, { weeklyHours: number; overtimeDoubleHours: number }> = {
+  2026: { weeklyHours: 48, overtimeDoubleHours: 9 },
+  2027: { weeklyHours: 46, overtimeDoubleHours: 9 },
+  2028: { weeklyHours: 44, overtimeDoubleHours: 10 },
+  2029: { weeklyHours: 42, overtimeDoubleHours: 11 },
+  2030: { weeklyHours: 40, overtimeDoubleHours: 12 },
 };
+
+/** Política con los topes legales vigentes en la fecha dada ("YYYY-MM-DD"). */
+export function lftPolicy(date: string, overrides: Partial<Policy> = {}): Policy {
+  const year = Math.min(Math.max(Number(date.slice(0, 4)), 2026), 2030);
+  const step = LFT_GRADUAL_SCHEDULE[year];
+  return {
+    timeZone: "America/Mexico_City",
+    lateToleranceMinutes: 10,
+    overtimeMinimumMinutes: 30,
+    duplicateWindowMinutes: 2,
+    weeklyLimitHours: step.weeklyHours,
+    overtimeDoubleCapMinutes: step.overtimeDoubleHours * 60,
+    overtimeTripleCapMinutes: 4 * 60,
+    overtimeDailyMaxMinutes: 4 * 60,
+    overtimeMaxDaysPerWeek: 4,
+    dailyTotalMaxMinutes: 12 * 60,
+    ...overrides,
+  };
+}
+
+export const DEFAULT_POLICY: Policy = lftPolicy("2026-01-01");
 
 export interface DayResult {
   employeeId: string;
@@ -69,8 +95,10 @@ export interface DayResult {
 }
 
 export type ComplianceCode =
-  | "OVERTIME_DAILY_OVER_3H"
-  | "OVERTIME_MORE_THAN_3_DAYS"
+  | "OVERTIME_DAILY_MAX_EXCEEDED"
+  | "OVERTIME_TOO_MANY_DAYS"
+  | "OVERTIME_WEEKLY_MAX_EXCEEDED"
+  | "DAILY_TOTAL_OVER_12H"
   | "WEEKLY_LIMIT_EXCEEDED"
   | "NO_WEEKLY_REST_DAY";
 
@@ -86,9 +114,9 @@ export interface WeekResult {
   days: DayResult[];
   workedMinutes: number;
   overtimeMinutes: number;
-  /** Primeras 9 h semanales de tiempo extra: pago al 200% (art. 67). */
+  /** Tiempo extra hasta el tope del año: se paga 100% más (art. 66). */
   overtimeDoubleMinutes: number;
-  /** Excedente de 9 h semanales: pago al 300% (art. 68). */
+  /** Excedente sobre el tope del art. 66: se paga 200% más (art. 68). */
   overtimeTripleMinutes: number;
   alerts: ComplianceAlert[];
 }

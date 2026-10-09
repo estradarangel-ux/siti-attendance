@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeWeek, DEFAULT_POLICY, type Punch, type ScheduledDay, type Shift } from "../src/index.ts";
+import { computeWeek, DEFAULT_POLICY, lftPolicy, type Punch, type ScheduledDay, type Shift } from "../src/index.ts";
 
 const office: Shift = { kind: "diurna", start: "09:00", end: "18:00", unpaidBreakMinutes: 60 };
 const night: Shift = { kind: "nocturna", start: "22:00", end: "05:00" };
@@ -44,20 +44,39 @@ test("checadas duplicadas se ignoran y checada única queda incompleta", () => {
   assert.equal(r.days[1].incomplete, true);
 });
 
-test("tiempo extra: dobles hasta 9 h, triples después, y alertas art. 66", () => {
-  // 4 días saliendo a las 22:00 => 4 h extra diarias = 16 h extra.
-  const punches = ["05", "06", "07", "08"].flatMap((d) => inOut(d, "09:00", "22:00"));
+test("tiempo extra 2026: dobles hasta 9 h, triples después; 4 días x 3 h es legal", () => {
+  // 4 días saliendo a las 21:00 => 3 h extra diarias = 12 h extra.
+  const punches = ["05", "06", "07", "08"].flatMap((d) => inOut(d, "09:00", "21:00"));
   const r = computeWeek("E1", week(office), punches, DEFAULT_POLICY);
-  assert.equal(r.overtimeMinutes, 16 * 60);
+  assert.equal(r.overtimeMinutes, 12 * 60);
   assert.equal(r.overtimeDoubleMinutes, 9 * 60);
-  assert.equal(r.overtimeTripleMinutes, 7 * 60);
-  const codes = r.alerts.map((a) => a.code);
-  assert.ok(codes.includes("OVERTIME_DAILY_OVER_3H"));
-  assert.ok(codes.includes("OVERTIME_MORE_THAN_3_DAYS"));
+  assert.equal(r.overtimeTripleMinutes, 3 * 60);
+  assert.deepEqual(r.alerts, []);
 });
 
-test("límite semanal de 40 h genera tiempo extra aunque no haya excedente diario", () => {
-  const policy = { ...DEFAULT_POLICY, weeklyLimitHours: 40 };
+test("alertas arts. 66 y 68: más de 4 h diarias, más de 4 días y más de 12 h totales", () => {
+  // 5 días saliendo a las 23:00 => 5 h extra diarias (13 h trabajadas) = 25 h extra.
+  const punches = ["05", "06", "07", "08", "09"].flatMap((d) => inOut(d, "09:00", "23:00"));
+  const r = computeWeek("E1", week(office), punches, DEFAULT_POLICY);
+  const codes = new Set(r.alerts.map((a) => a.code));
+  for (const c of [
+    "OVERTIME_DAILY_MAX_EXCEEDED",
+    "DAILY_TOTAL_OVER_12H",
+    "OVERTIME_TOO_MANY_DAYS",
+    "OVERTIME_WEEKLY_MAX_EXCEEDED",
+  ] as const) assert.ok(codes.has(c), c);
+});
+
+test("calendario gradual de la reforma (transitorios 2º y 4º)", () => {
+  assert.equal(lftPolicy("2026-10-09").weeklyLimitHours, 48);
+  assert.equal(lftPolicy("2027-03-01").weeklyLimitHours, 46);
+  assert.equal(lftPolicy("2028-01-01").overtimeDoubleCapMinutes, 10 * 60);
+  assert.equal(lftPolicy("2030-06-01").weeklyLimitHours, 40);
+  assert.equal(lftPolicy("2035-06-01").overtimeDoubleCapMinutes, 12 * 60);
+});
+
+test("jornada de 40 h (2030) genera tiempo extra aunque no haya excedente diario", () => {
+  const policy = lftPolicy("2030-01-07");
   const punches = ["05", "06", "07", "08", "09", "10"].flatMap((d) => inOut(d, "09:00", "18:00"));
   const r = computeWeek("E1", week(office), punches, policy);
   assert.equal(r.workedMinutes, 48 * 60);
