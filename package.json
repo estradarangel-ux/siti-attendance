@@ -1,0 +1,11 @@
+{
+  "name": "siti-attendance",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SaaS de control de asistencia con terminales Hikvision, alineado a la LFT (México)",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
