@@ -44,9 +44,31 @@ El detalle técnico está en [02-hikvision-integracion.md](02-hikvision-integrac
 | **Tú (fundador)** | Ventas, relación con Hikvision, equipo de pruebas, decisiones de negocio |
 | Externo recomendado | Abogado laboral y de datos personales: revisar el aviso de privacidad, el contrato de encargo y los criterios de horas extra |
 
-## Decisiones pendientes del fundador
-1. **Mercado inicial:** ¿PyMEs de 10 a 200 empleados, corporativos o ambos?
-2. **Modelo de entrega:** SaaS en la nube operado por ti (recomendado) o instalación en el servidor de cada cliente.
-3. **Equipo de pruebas:** ¿tienes un DS-K1T342/343 o similar para el piloto?
-4. **Acceso Hikvision:** registro en TPP y AK/SK de Hik-Partner Pro (ver los pasos en el doc 02).
-5. **Marca y precio:** ¿"SITI" es el nombre comercial? Referencia de mercado: MXN 30 a 60 por empleado al mes **[I, por validar]**.
+## Decisiones del fundador (9-oct-2026)
+1. **Mercado:** micro y PyMEs.
+2. **Entrega:** SaaS en la nube, operado por el fundador.
+3. **Equipos de prueba:** ya los tienes. Falta anotar el modelo y la versión de firmware de cada uno.
+4. **Principio rector:** la menor inversión posible.
+
+## Estrategia de inversión mínima
+| Rubro | Decisión | Costo estimado [I] |
+|---|---|---|
+| Hardware en el cliente | **Sin hardware extra.** El agente es un programa ligero (servicio de Windows o Linux) que corre en cualquier PC que el cliente ya tenga. Solo si el cliente no tiene PC encendida, se ofrece una Raspberry Pi opcional. | $0 (Pi opcional: unos USD 60 a 80) |
+| Modo "sin agente" | Si el firmware del equipo lo permite, el reloj manda sus checadas directo a la nube (`httpHosts` con HTTPS o dominio). En ese caso las altas de rostros se hacen desde la pantalla del equipo o con la app Hik-Partner Pro. | $0 |
+| Nube al arranque | Un solo servicio Node con PostgreSQL administrado en plan gratuito o de entrada (Neon, Supabase, Render o Railway) y el frontend en Cloudflare Pages o Vercel (gratis). | USD 0 a 25 al mes |
+| Desarrollo | Claude Code dentro de tu plan Max, sin costo adicional. | $0 extra |
+| Licencias Hikvision | Se evitan HikCentral y Hik-Connect for Teams (cobran por puerta). Se usa ISAPI, que es gratis, y la OpenAPI de Hik-Partner Pro, incluida en tu cuenta de partner. | $0 |
+| Gastos inevitables | Dominio (~MXN 300 al año) y la revisión de un abogado para el aviso de privacidad y el contrato de encargo. | Variable |
+| ISUP 5.0 | Se pospone a la fase 5. Solo vale la pena con muchos clientes. | – |
+
+Equipo sugerido para revender a micro y PyMEs:
+- **DS-K1T320** o **DS-K1T343**, con rostro.
+- **DS-K1A802AEF-B**, si al cliente le basta con huella.
+
+En ambos casos, solo modelos que soporten ISAPI e ISUP 5.0.
+
+## Siguiente paso: fase 1 (piloto técnico)
+1. Anota el modelo y la versión de firmware de tus equipos (menú del equipo, o la app Hik-Partner Pro → Dispositivo → Información).
+2. Conecta el equipo a tu red, activa ISAPI/HTTP, sincroniza la hora por NTP y crea un usuario de API que no sea admin.
+3. Claude construye `packages/agent`: un agente que lee las checadas con `AcsEvent`, las convierte con `@siti/core` y genera el reporte semanal.
+4. Lo pruebas en tu red (el agente corre en tu PC). Claude no puede ver tu red local desde la nube; tú ejecutas el agente.
